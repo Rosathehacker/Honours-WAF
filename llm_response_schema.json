@@ -1,0 +1,94 @@
+{
+  "name": "prompt_injection_analysis",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "indicators": {
+        "type": "array",
+        "description": "List of identified indicators of prompt injection.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "type_of_injection": {
+        "type": "string",
+        "description": "Classification of the type of injection detected or 'benign' if none.",
+        "enum": [
+          "Direct Injection",
+          "Indirect Injection",
+          "Cognitive Hacking",
+          "Repetition",
+          "Syntactical transformation",
+          "Few shot",
+          "Text Completion",
+          "Prompt Leakage",
+          "Token Smuggling",
+          "Adversarial Examples",
+          "In-Context Learning Exploitation",
+          "Model Extraction",
+          "Factuality Attacks",
+          "benign"
+        ]
+      },
+      "keyword_signs": {
+        "type": "array",
+        "description": "List of keywords found indicating potential prompt injections.",
+        "items": {
+          "type": "string"
+        }
+      },
+      "command_structure_rating": {
+        "type": "integer",
+        "description": "Rating for command structure presence."
+      },
+      "vocabulary_rating": {
+        "type": "integer",
+        "description": "Rating for suspicious vocabulary usage."
+      },
+      "intent_context_rating": {
+        "type": "integer",
+        "description": "Rating for intent and context analysis."
+      },
+      "semantic_risk_rating": {
+        "type": "integer",
+        "description": "Rating for semantic risk assessment."
+      },
+      "special_characters_rating": {
+        "type": "integer",
+        "description": "Rating for presence of special characters and encoding."
+      },
+      "repetition_rating": {
+        "type": "integer",
+        "description": "Rating for repetition or redundancy in text."
+      },
+      "language_style_rating": {
+        "type": "integer",
+        "description": "Rating for language style and tone indication."
+      },
+      "language_consistency_rating": {
+        "type": "integer",
+        "description": "Rating for language consistency."
+      },
+      "overall_injection_score": {
+        "type": "integer",
+        "description": "Final score indicating likelihood of prompt injection."
+      }
+    },
+    "required": [
+      "indicators",
+      "type_of_injection",
+      "keyword_signs",
+      "command_structure_rating",
+      "vocabulary_rating",
+      "intent_context_rating",
+      "semantic_risk_rating",
+      "special_characters_rating",
+      "repetition_rating",
+      "language_style_rating",
+      "language_consistency_rating",
+      "overall_injection_score"
+    ],
+    "additionalProperties": false
+  }
+}
