@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace YourNamespace.Controllers
 {
@@ -12,10 +13,12 @@ namespace YourNamespace.Controllers
     public class LLMController : ControllerBase
     {
         private readonly HttpClient _httpClient;
+        private readonly IConfiguration _configuration;
 
-        public LLMController(IHttpClientFactory httpClientFactory)
+        public LLMController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
         {
             _httpClient = httpClientFactory.CreateClient();
+            _configuration = configuration;
         }
 
         [HttpPost]
@@ -23,21 +26,21 @@ namespace YourNamespace.Controllers
         {
             try
             {
-                // Step 1: Send input to the first OpenAI assistant
-                var openAiResponse = await SendToOpenAiAssistant(input.UserInput, "FirstAssistantEndpoint");
+       
+                var openAiResponse = await SendToOpenAiAssistant(input.UserInput, _configuration["OpenAI:FirstAssistantId"]);
 
-                // Step 2: Push the OpenAI response JSON to the Python script
+          
                 var pythonResponse = await PushToPythonScript(openAiResponse);
 
                 if (pythonResponse == 0)
                 {
-                    // Step 3A: Send original input to the second OpenAI assistant
-                    var secondAssistantResponse = await SendToOpenAiAssistant(input.UserInput, "SecondAssistantEndpoint");
+        
+                    var secondAssistantResponse = await SendToOpenAiAssistant(input.UserInput, _configuration["OpenAI:SecondAssistantId"]);
                     return Ok(new { Response = secondAssistantResponse });
                 }
                 else if (pythonResponse == 1)
                 {
-                    // Step 3B: Send "canned response"
+                 
                     return Ok(new { Response = "Canned response" });
                 }
                 else
@@ -51,12 +54,20 @@ namespace YourNamespace.Controllers
             }
         }
 
-        private async Task<string> SendToOpenAiAssistant(string userInput, string assistantEndpoint)
+        private async Task<string> SendToOpenAiAssistant(string userInput, string assistantId)
         {
-            var requestBody = new { Input = userInput };
+            var requestBody = new
+            {
+                Input = userInput,
+                AssistantId = assistantId
+            };
+
             var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync(assistantEndpoint, content);
+            _httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _configuration["OpenAI:ApiKey"]);
+
+            var response = await _httpClient.PostAsync("https://api.openai.com/v1/assistants", content);
             response.EnsureSuccessStatusCode();
 
             var responseString = await response.Content.ReadAsStringAsync();
