@@ -1,93 +1,59 @@
-using System;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-
-namespace YourNamespace.Controllers
-{
-    [ApiController]
-    [Route("api/[controller]")]
-    public class LLMController : ControllerBase
-    {
-        private readonly HttpClient _httpClient;
-        private readonly IConfiguration _configuration;
-
-        public LLMController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
-        {
-            _httpClient = httpClientFactory.CreateClient();
-            _configuration = configuration;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Input Webpage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
         }
+        input, button {
+            padding: 10px;
+            margin: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>LLM Input Interface</h1>
+    <p>Enter your query below:</p>
+    <input type="text" id="userInput" placeholder="Type your input here">
+    <button onclick="sendInput()">Submit</button>
+    <p id="response"></p>
 
-        [HttpPost]
-        public async Task<IActionResult> ProcessLLMInput([FromBody] InputModel input)
-        {
-            try
-            {
-       
-                var openAiResponse = await SendToOpenAiAssistant(input.UserInput, _configuration["OpenAI:FirstAssistantId"]);
+    <script>
+        async function sendInput() {
+            const userInput = document.getElementById("userInput").value;
+            const responseElement = document.getElementById("response");
 
-          
-                var pythonResponse = await PushToPythonScript(openAiResponse);
-
-                if (pythonResponse == 0)
-                {
-        
-                    var secondAssistantResponse = await SendToOpenAiAssistant(input.UserInput, _configuration["OpenAI:SecondAssistantId"]);
-                    return Ok(new { Response = secondAssistantResponse });
-                }
-                else if (pythonResponse == 1)
-                {
-                 
-                    return Ok(new { Response = "Canned response" });
-                }
-                else
-                {
-                    return BadRequest("Unexpected response from Python script.");
-                }
+            if (!userInput) {
+                responseElement.textContent = "Please enter some input.";
+                return;
             }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Internal Server Error: {ex.Message}");
+
+            try {
+                // Send input to the API
+                const response = await fetch('/api/LLM', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ UserInput: userInput })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                responseElement.textContent = `Response: ${data.Response}`;
+            } catch (error) {
+                responseElement.textContent = `Error: ${error.message}`;
             }
         }
-
-        private async Task<string> SendToOpenAiAssistant(string userInput, string assistantId)
-        {
-            var requestBody = new
-            {
-                Input = userInput,
-                AssistantId = assistantId
-            };
-
-            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-
-            _httpClient.DefaultRequestHeaders.Authorization =
-                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _configuration["OpenAI:ApiKey"]);
-
-            var response = await _httpClient.PostAsync("https://api.openai.com/v1/assistants", content);
-            response.EnsureSuccessStatusCode();
-
-            var responseString = await response.Content.ReadAsStringAsync();
-            return responseString;
-        }
-
-        private async Task<int> PushToPythonScript(string jsonResponse)
-        {
-            var content = new StringContent(jsonResponse, Encoding.UTF8, "application/json");
-
-            var response = await _httpClient.PostAsync("http://localhost:5000/mla_model_run", content);
-            response.EnsureSuccessStatusCode();
-
-            var responseString = await response.Content.ReadAsStringAsync();
-            return int.Parse(responseString); // Assuming the Python API returns a simple numeric value
-        }
-    }
-
-    public class InputModel
-    {
-        public string UserInput { get; set; }
-    }
-}
+    </script>
+</body>
+</html>
