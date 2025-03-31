@@ -1,11 +1,9 @@
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
 import xgboost as xgb
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.metrics import f1_score, precision_score, recall_score
-
-
+import pickle
 import os
 import ast
 
@@ -19,15 +17,7 @@ def openfiles(set_type):
     dataset = dataset.drop(dataset.columns[13], axis=1)
     return dataset
 
-def open_training_file():
-    training_dataset_raw = pd.read_csv('trainingdata.csv')
-    training_dataset_raw = training_dataset_raw.drop(training_dataset_raw.columns[0], axis=1)
-    return training_dataset_raw
 
-def open_test_file():
-    test_dataset_raw = pd.read_csv('testdata.csv')
-    test_dataset_raw = test_dataset_raw.drop(test_dataset_raw.columns[0], axis=1)
-    return test_dataset_raw
 
 def check_llm_accuracy_dataset_pre_mla(techniques, dataset):
     positive_negative_array = []
@@ -50,16 +40,16 @@ def check_llm_accuracy_dataset_pre_mla(techniques, dataset):
         else:
 
             false_true_array.append(0)
-    f1, f2 = calculate_f1_f2(positive_negative_array, training_dataset["label"]) 
-    return f1, f2
+    f1, f2, recall, precision = calculate_f1_f2(positive_negative_array, dataset["label"]) 
+    return f1, f2, recall, precision
 
 def calculate_f1_f2(predictions, labels):
-    binary_predictions = [1 if p >= 0.5 else 0 for p in predictions]
-    f1 = f1_score(labels, binary_predictions, average='weighted')
-    precision = precision_score(labels, binary_predictions, average='weighted')
-    recall = recall_score(labels, binary_predictions, average='weighted')
+    binary_predictions = [1 if p >= 0.1 else 0 for p in predictions]
+    f1 = f1_score(labels, binary_predictions, average='micro')
+    precision = precision_score(labels, binary_predictions, average='micro')
+    recall = recall_score(labels, binary_predictions, average='micro')
     f2 = (1 + 2**2) * (precision * recall) / ((2**2 * precision) + recall)
-    return f1, f2
+    return f1, f2, recall, precision
 
 def convert_to_numberical(dataset, indicators, techniques, columns_labels):
     dataset_numerised = pd.DataFrame(columns=columns_labels)
@@ -69,7 +59,12 @@ def convert_to_numberical(dataset, indicators, techniques, columns_labels):
         indicators_list[i] = ast.literal_eval(indicators_list[i])
     keyword_list = dataset['keyword_signs']
     keyword_list = keyword_list.tolist()
+    all_keywords = set()
     no_of_keywords = []
+    for i in range(len(keyword_list)):
+        keyword = ast.literal_eval(keyword_list[i])
+        if isinstance(keyword, list):
+            all_keywords.update(keyword)       
     for i in range(len(keyword_list)):
         keyword_list[i] = ast.literal_eval(keyword_list[i])
         no_of_keywords.append(len(keyword_list[i]))
@@ -140,18 +135,16 @@ def convert_to_numberical(dataset, indicators, techniques, columns_labels):
         dataset_numerised = pd.concat((dataset_numerised, data_numerised_df), ignore_index=True)
     return dataset_numerised
 
-def mla(training_dataset_numerised, training_dataset, columns_labels):
+def mla(training_dataset_numerised, training_dataset, columns_labels):          
     xgb_train = xgb.DMatrix(training_dataset_numerised[columns_labels], label=training_dataset["label"])
     params = {
   "colsample_bynode": 0.8,
-  "learning_rate": 1,
-  "max_depth": 5,
+  "learning_rate": 0.1,
+  "max_depth": 7,
   "num_parallel_tree": 100,
   "objective": "binary:logistic",
-  "subsample": 0.8,
-  "tree_method": "hist",
-  "device": "cuda",
-}
+  "subsample": 1,
+  "tree_method": "hist",}
     num_rounds = 100
     model = xgb.train(params, xgb_train, num_rounds)
     return model
@@ -159,8 +152,12 @@ def mla(training_dataset_numerised, training_dataset, columns_labels):
 def test_mla(testing_dataset_numerised, testing_dataset, mla_model, columns_labels):
     xgb_test = xgb.DMatrix(testing_dataset_numerised[columns_labels])
     predictions = mla_model.predict(xgb_test)
-    f1, f2 = calculate_f1_f2(predictions, testing_dataset["label"])
-    return f1, f2
+    f1, f2, mla_recall, mla_precision = calculate_f1_f2(predictions, testing_dataset["label"])
+    return f1, f2, mla_recall, mla_precision, pd.DataFrame(predictions)
+
+def save_model(mla_model):
+    with open('llm_injection_model.pkl', 'wb') as file:
+        pickle.dump(mla_model, file)
 
 indicators = ["Instructional overrides",
               "Role reversal/impersonation",
@@ -182,7 +179,8 @@ techniques = ["Direct Injection",
               "Cognitive Hacking",
               "Repetition", 
               "Syntactical transformation",
-              "Few-Shot", "Text Completion",
+              "Few-Shot", 
+              "Text Completion",
               "Prompt Leakage",
               "Token Smuggling",
               "Adversarial Examples",
@@ -233,12 +231,10 @@ columns_labels = [
     "overall_injection_score"]
 training_dataset = openfiles("train")
 testing_dataset = openfiles("test")
-training_ac, training_f1 ,training_f2 = check_llm_accuracy_dataset_pre_mla(techniques, training_dataset)
-testing_ac, testing_f1, testing_f2 = check_llm_accuracy_dataset_pre_mla(techniques, testing_dataset)
+training_f1 ,training_f2, training_recall, training_precision = check_llm_accuracy_dataset_pre_mla(techniques, training_dataset)
+testing_f1, testing_f2, testing_recall, testing_precision = check_llm_accuracy_dataset_pre_mla(techniques, testing_dataset)
 training_dataset_numerised = convert_to_numberical(training_dataset, indicators, techniques, columns_labels)
 testing_dataset_numerised = convert_to_numberical(testing_dataset, indicators, techniques, columns_labels)
 mla_model = mla(training_dataset_numerised, training_dataset, columns_labels)
-f1_mla, f2_mla = test_mla(testing_dataset_numerised, testing_dataset, mla_model, columns_labels)
-
-
- 
+f1_mla, f2_mla, mla_recall, mla_precision, predictions = test_mla(testing_dataset_numerised, testing_dataset, mla_model, columns_labels)
+save_model(mla_model)
