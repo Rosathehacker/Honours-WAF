@@ -7,6 +7,7 @@ import pickle
 import os
 import ast
 
+
 def openfiles(set_type):
     directory_path = set_type + 'ing_data_saved'
     labels = ["prompt", "indicators", "type_of_injection", "keyword_signs", "command_structure_rating", "vocabulary_rating", "intent_context_rating", "semantic_risk_rating", "special_characters_rating", "repetition_rating", "language_style_rating", "language_consistency_rating", "overall_injection_score"]
@@ -59,12 +60,7 @@ def convert_to_numberical(dataset, indicators, techniques, columns_labels):
         indicators_list[i] = ast.literal_eval(indicators_list[i])
     keyword_list = dataset['keyword_signs']
     keyword_list = keyword_list.tolist()
-    all_keywords = set()
-    no_of_keywords = []
-    for i in range(len(keyword_list)):
-        keyword = ast.literal_eval(keyword_list[i])
-        if isinstance(keyword, list):
-            all_keywords.update(keyword)       
+    no_of_keywords = []      
     for i in range(len(keyword_list)):
         keyword_list[i] = ast.literal_eval(keyword_list[i])
         no_of_keywords.append(len(keyword_list[i]))
@@ -238,3 +234,7 @@ testing_dataset_numerised = convert_to_numberical(testing_dataset, indicators, t
 mla_model = mla(training_dataset_numerised, training_dataset, columns_labels)
 f1_mla, f2_mla, mla_recall, mla_precision, predictions = test_mla(testing_dataset_numerised, testing_dataset, mla_model, columns_labels)
 save_model(mla_model)
+print(f"f1 {f1_mla}, f2 {f2_mla}")
+
+
+ 
