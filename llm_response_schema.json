@@ -23,7 +23,6 @@
           "Text Completion",
           "Prompt Leakage",
           "Token Smuggling",
-          "Adversarial Examples",
           "In-Context Learning Exploitation",
           "Model Extraction",
           "Factuality Attacks",
