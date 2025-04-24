@@ -1,12 +1,14 @@
 import pandas as pd
 import numpy as np
 import xgboost as xgb
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score
 from sklearn.metrics import f1_score, precision_score, recall_score
+from sklearn.metrics import confusion_matrix, fbeta_score
+import matplotlib.pyplot as plt
 import pickle
 import os
 import ast
-
+import seaborn as sns
 
 def openfiles(set_type):
     directory_path = set_type + 'ing_data_saved'
@@ -41,16 +43,26 @@ def check_llm_accuracy_dataset_pre_mla(techniques, dataset):
         else:
 
             false_true_array.append(0)
-    f1, f2, recall, precision = calculate_f1_f2(positive_negative_array, dataset["label"]) 
-    return f1, f2, recall, precision
+    f1, f2, recall, precision, accuracy, cm = calculate_f1_f2(positive_negative_array, dataset["label"]) 
+    return f1, f2, recall, precision, accuracy, cm
 
 def calculate_f1_f2(predictions, labels):
     binary_predictions = [1 if p >= 0.1 else 0 for p in predictions]
-    f1 = f1_score(labels, binary_predictions, average='micro')
-    precision = precision_score(labels, binary_predictions, average='micro')
-    recall = recall_score(labels, binary_predictions, average='micro')
-    f2 = (1 + 2**2) * (precision * recall) / ((2**2 * precision) + recall)
-    return f1, f2, recall, precision
+    cm = confusion_matrix(binary_predictions, labels)
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", 
+            yticklabels=['Predicted False', 'Predicted True'], 
+            xticklabels=['Actual False', 'Actual True'])
+    plt.title("Confusion Matrix")
+    plt.ylabel("Predicted")
+    plt.xlabel("Actual")
+    plt.show()
+    accuracy = accuracy_score(labels, binary_predictions)
+    f1 = f1_score(labels, binary_predictions, average='weighted')
+    precision = precision_score(labels, binary_predictions, average='weighted')
+    recall = recall_score(labels, binary_predictions, average='weighted')
+    f2 = fbeta_score(labels, binary_predictions, beta=2, average='weighted')
+    return f1, f2, recall, precision, accuracy, cm
 
 def convert_to_numberical(dataset, indicators, techniques, columns_labels):
     dataset_numerised = pd.DataFrame(columns=columns_labels)
@@ -108,7 +120,6 @@ def convert_to_numberical(dataset, indicators, techniques, columns_labels):
             "Cognitive Hacking": [techniques_features[df_index, 2]], 
             "Repetition": [techniques_features[df_index, 3]], 
             "Syntactical transformation": [techniques_features[df_index, 4]], 
-            "Few-Shot": [techniques_features[df_index, 5]], 
             "Text Completion": [techniques_features[df_index, 6]], 
             "Prompt Leakage": [techniques_features[df_index, 7]], 
             "Token Smuggling": [techniques_features[df_index, 8]], 
@@ -140,7 +151,7 @@ def mla(training_dataset_numerised, training_dataset, columns_labels):
   "num_parallel_tree": 100,
   "objective": "binary:logistic",
   "subsample": 1,
-  "tree_method": "hist",}
+  "tree_method": "approx",}
     num_rounds = 100
     model = xgb.train(params, xgb_train, num_rounds)
     return model
@@ -148,8 +159,8 @@ def mla(training_dataset_numerised, training_dataset, columns_labels):
 def test_mla(testing_dataset_numerised, testing_dataset, mla_model, columns_labels):
     xgb_test = xgb.DMatrix(testing_dataset_numerised[columns_labels])
     predictions = mla_model.predict(xgb_test)
-    f1, f2, mla_recall, mla_precision = calculate_f1_f2(predictions, testing_dataset["label"])
-    return f1, f2, mla_recall, mla_precision, pd.DataFrame(predictions)
+    f1, f2, mla_recall, mla_precision, accuracy, cm = calculate_f1_f2(predictions, testing_dataset["label"])
+    return f1, f2, mla_recall, mla_precision, pd.DataFrame(predictions), accuracy, cm
 
 def save_model(mla_model):
     with open('llm_injection_model.pkl', 'wb') as file:
@@ -175,7 +186,6 @@ techniques = ["Direct Injection",
               "Cognitive Hacking",
               "Repetition", 
               "Syntactical transformation",
-              "Few-Shot", 
               "Text Completion",
               "Prompt Leakage",
               "Token Smuggling",
@@ -206,7 +216,6 @@ columns_labels = [
     "Cognitive Hacking", 
     "Repetition", 
     "Syntactical transformation", 
-    "Few-Shot", 
     "Text Completion", 
     "Prompt Leakage", 
     "Token Smuggling", 
@@ -227,14 +236,15 @@ columns_labels = [
     "overall_injection_score"]
 training_dataset = openfiles("train")
 testing_dataset = openfiles("test")
-training_f1 ,training_f2, training_recall, training_precision = check_llm_accuracy_dataset_pre_mla(techniques, training_dataset)
-testing_f1, testing_f2, testing_recall, testing_precision = check_llm_accuracy_dataset_pre_mla(techniques, testing_dataset)
+training_f1 ,training_f2, training_recall, training_precision, accuracy_training, cm_trainging = check_llm_accuracy_dataset_pre_mla(techniques, training_dataset)
+testing_f1, testing_f2, testing_recall, testing_precision, accuracy_testing, cm_testing = check_llm_accuracy_dataset_pre_mla(techniques, testing_dataset)
+overall_f1, overall_f2, overall_recall, overall_overall, accuracy_overall, cm_overall = check_llm_accuracy_dataset_pre_mla(techniques, pd.concat([training_dataset, testing_dataset], ignore_index=True))
 training_dataset_numerised = convert_to_numberical(training_dataset, indicators, techniques, columns_labels)
 testing_dataset_numerised = convert_to_numberical(testing_dataset, indicators, techniques, columns_labels)
 mla_model = mla(training_dataset_numerised, training_dataset, columns_labels)
-f1_mla, f2_mla, mla_recall, mla_precision, predictions = test_mla(testing_dataset_numerised, testing_dataset, mla_model, columns_labels)
+f1_mla, f2_mla, mla_recall, mla_precision, predictions, accuracy_mla, cm_mla = test_mla(testing_dataset_numerised, testing_dataset, mla_model, columns_labels)
 save_model(mla_model)
+print(cm_mla)
 print(f"f1 {f1_mla}, f2 {f2_mla}")
-
 
  
